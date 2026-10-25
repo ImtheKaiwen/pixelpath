@@ -216,8 +216,12 @@ a {
   display: none;
 }
 .sidebar.collapsed .model-list {
+  width: 42px;
+  margin-inline: auto;
+  padding: 0;
   align-items: center;
-  overflow: visible;
+  overflow-x: clip;
+  overflow-y: auto;
 }
 .model-row {
   position: relative;
@@ -236,9 +240,16 @@ a {
 }
 .sidebar.collapsed .model-row {
   width: 42px;
-  grid-template-columns: 36px;
-  padding: 4px;
+  min-width: 42px;
+  height: 42px;
+  grid-template-columns: 34px;
+  justify-content: center;
+  padding: 3px;
   gap: 0;
+}
+.sidebar.collapsed .model-thumb {
+  width: 34px;
+  height: 34px;
 }
 .model-row:hover {
   background: var(--color-surface-hover);
@@ -251,6 +262,7 @@ a {
 .model-thumb {
   width: 36px;
   height: 36px;
+  min-width: 0;
   border-radius: 9px;
   background: var(--color-surface-subtle);
   color: var(--color-text-secondary);
@@ -397,6 +409,8 @@ a {
   border-radius: 10px;
   background: var(--color-surface-subtle);
   isolation: isolate;
+  min-width: 0;
+  overflow: clip;
 }
 .tab-switch-indicator {
   position: absolute;
@@ -415,6 +429,7 @@ a {
   position: relative;
   z-index: 1;
   flex: 1 1 0;
+  min-width: 0;
   height: 31px;
   padding: 0 10px;
   border: 0;
@@ -432,6 +447,20 @@ a {
     background var(--duration-normal) var(--ease-out),
     box-shadow var(--duration-normal) var(--ease-out),
     transform var(--duration-fast) var(--ease-out);
+}
+.tab-switch button svg {
+  flex: 0 0 auto;
+}
+.tab-switch button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
+}
+.tab-switch button:focus-visible {
+  outline: 2px solid var(--color-text);
+  outline-offset: -2px;
 }
 .tab-switch button.active {
   color: var(--color-text);
