@@ -1346,6 +1346,32 @@ td {
 .form-grid label.wide {
   grid-column: 1/-1;
 }
+.hybrid-settings {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-subtle);
+  animation: selectIn var(--duration-fast) var(--ease-out);
+}
+.hybrid-settings .field-title {
+  color: var(--color-text);
+  font-size: 10px;
+  font-weight: 700;
+}
+.hybrid-number-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.production-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
 .form-grid input,
 .form-grid select {
   height: var(--control-height);

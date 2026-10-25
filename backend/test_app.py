@@ -1,4 +1,4 @@
-import tempfile,subprocess,sys,os,time,json,urllib.request,urllib.parse,csv,io,queue,threading,re
+import tempfile,subprocess,sys,os,time,json,urllib.request,urllib.parse,csv,io,queue,threading,re,zipfile
 from pathlib import Path
 from engine import greedy_cuboid_cover
 root=Path(__file__).resolve().parent
@@ -70,6 +70,20 @@ with tempfile.TemporaryDirectory() as folder:
     rid=data['id'];status,rect_model=request(port,f'/api/models/{rid}')
     assert rect_model['algorithm']=='cuboid' and any(p.get('sx')!=p.get('sy') or p.get('sy')!=p.get('sz') for p in rect_model['pieces'])
     print('CUBOID import factor4:',data)
+    params=urllib.parse.urlencode({'name':'Hybrid Test','filename':'mesh.schem','factor':'4','cube_cm':'2','algorithm':'hybrid','hybrid_min':'100','hybrid_target':'130','hybrid_max':'150'})
+    status,data=request(port,'/api/models/import?'+params,'POST',(root/'seed/fluttershy.schem').read_bytes())
+    assert status==201 and 100<=data['piece_count']<=150
+    hid=data['id'];status,hybrid_model=request(port,f'/api/models/{hid}')
+    assert hybrid_model['algorithm']=='hybrid' and hybrid_model['visual_voxel_count']==1002
+    status,production=request(port,f'/api/models/{hid}/production.zip')
+    with zipfile.ZipFile(io.BytesIO(production)) as package:
+      names=package.namelist();manifest=json.loads(package.read('manifest.json'))
+      assert len([name for name in names if name.endswith('.stl')])==hybrid_model['piece_count']
+      assert manifest['geometry_mode']=='solid_voxel_union'
+      assert manifest['connectors']['status']=='not_generated'
+      first=package.read(next(name for name in names if name.endswith('.stl')))
+      assert len(first)>84
+    print('HYBRID / production ZIP:',data['piece_count'],'real STL files')
     params=urllib.parse.urlencode({'name':'CSV Test','filename':'pieces.csv','factor':'5','cube_cm':'2'})
     status,data=request(port,'/api/models/import?'+params,'POST',(root/'seed/fluttershy_pieces.csv').read_bytes())
     assert data['piece_count']==442
@@ -82,7 +96,7 @@ with tempfile.TemporaryDirectory() as folder:
     assert m3['piece_count']==442 and m3['name']=='Fluttershy Yenilendi'
     status,d=request(port,f'/api/models/{cid}','DELETE')
     assert d['ok']
-    status,items=request(port,'/api/models');assert len(items['models'])==3
+    status,items=request(port,'/api/models');assert len(items['models'])==4
     print('DELETE / LIBRARY persistence test: pass')
   finally:
     proc.terminate()

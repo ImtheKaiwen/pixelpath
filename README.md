@@ -17,8 +17,11 @@ npm run electron:dev
 
 - **Küpler:** Modeli en büyük uygun küplerden başlayarak böler.
 - **En büyük prizmalar:** Küpleri de geçerli bir dikdörtgen prizma kabul eder; her adımda altı büyüme yönünü karşılaştırıp aynı renkteki en büyük hacmi seçer. Böylece model, küp moduna göre genellikle çok daha az parçayla üretilir.
+- **Hibrit fiziksel modüller:** Görsel voxel'leri korurken modeli hedeflenen fiziksel parça aralığına böler. Detay, maliyet, montaj veya dengeli öncelik seçilebilir; her voxel yalnızca bir bağlantılı modüle atanır.
 
 Prizma modu en büyük parçaları kullanan deterministik bir sezgiseldir; bütün olası 3B bölmeleri tüketerek matematiksel global minimum garantisi vermez. Montaj sırası yüzey temasına göre hesaplanır; fiziksel denge ve el erişimi için önce küçük bir deneme yapılması önerilir.
+
+Malzemeler ekranındaki üretim ZIP'i her parça için gerçek binary STL ile manifest ve dijital geometri kontrol raporu oluşturur. Mevcut STL'ler solid voxel birleşimleridir. Hollow ve bağlantı üretimi henüz tamamlanmadığından paket bunları doğrulanmış gibi göstermez; fiziksel baskı/tolerans testi ayrıca yapılmalıdır.
 
 ## Geliştirme ve doğrulama
 

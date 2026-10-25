@@ -120,7 +120,11 @@ export default function App() {
     [importName, setImportName] = useState("Yeni Model"),
     [factor, setFactor] = useState("5"),
     [cube, setCube] = useState("2"),
-    [algorithm, setAlgorithm] = useState("cube");
+    [algorithm, setAlgorithm] = useState("cube"),
+    [hybridMin, setHybridMin] = useState("100"),
+    [hybridTarget, setHybridTarget] = useState("130"),
+    [hybridMax, setHybridMax] = useState("150"),
+    [hybridPriority, setHybridPriority] = useState("balanced");
   const [formBusy, setFormBusy] = useState(false),
     [formError, setFormError] = useState("");
   const viewer = useRef(null),
@@ -278,6 +282,10 @@ export default function App() {
     setFactor("5");
     setCube("2");
     setAlgorithm("cube");
+    setHybridMin("100");
+    setHybridTarget("130");
+    setHybridMax("150");
+    setHybridPriority("balanced");
     setFormError("");
     setImportOpen(true);
   };
@@ -295,6 +303,10 @@ export default function App() {
         factor,
         cube_cm: cube,
         algorithm,
+        hybrid_min: hybridMin,
+        hybrid_target: hybridTarget,
+        hybrid_max: hybridMax,
+        hybrid_priority: hybridPriority,
       });
       const out = await api(`/api/models/import?${params}`, {
         method: "POST",
@@ -317,6 +329,10 @@ export default function App() {
     setFactor(String(model.factor || 5));
     setCube(String(model.cube_cm));
     setAlgorithm(model.algorithm || "cube");
+    setHybridMin(String(model.hybrid?.minimum || 100));
+    setHybridTarget(String(model.hybrid?.requested_target || 130));
+    setHybridMax(String(model.hybrid?.maximum || 150));
+    setHybridPriority(model.hybrid?.priority || "balanced");
     setFormError("");
     setSettingsOpen(true);
   };
@@ -332,6 +348,10 @@ export default function App() {
           factor,
           cube_cm: cube,
           algorithm,
+          hybrid_min: hybridMin,
+          hybrid_target: hybridTarget,
+          hybrid_max: hybridMax,
+          hybrid_priority: hybridPriority,
         }),
       });
       await refresh();
@@ -648,14 +668,24 @@ export default function App() {
                       hazırla.
                     </p>
                   </div>
-                  <a
-                    className="button secondary"
-                    href={`/api/models/${modelId}/export.csv`}
-                    download
-                  >
-                    <Icon name="download" />
-                    CSV indir
-                  </a>
+                  <div className="production-actions">
+                    <a
+                      className="button secondary"
+                      href={`/api/models/${modelId}/export.csv`}
+                      download
+                    >
+                      <Icon name="download" />
+                      CSV indir
+                    </a>
+                    <a
+                      className="button primary"
+                      href={`/api/models/${modelId}/production.zip`}
+                      download
+                    >
+                      <Icon name="download" />
+                      {t("productionZip")}
+                    </a>
+                  </div>
                 </div>
                 <div className="material-stats">
                   <div>
@@ -810,10 +840,62 @@ export default function App() {
               options={[
                 { value: "cube", label: t("cubeAlgorithm") },
                 { value: "cuboid", label: t("cuboidAlgorithm") },
+                { value: "hybrid", label: t("hybridAlgorithm") },
               ]}
               label={t("algorithm")}
             />
           </label>
+          {algorithm === "hybrid" && (
+            <div className="hybrid-settings wide">
+              <span className="field-title">{t("hybridRange")}</span>
+              <div className="hybrid-number-grid">
+                <label>
+                  {t("hybridMin")}
+                  <input
+                    type="number"
+                    min="1"
+                    max="2000"
+                    value={hybridMin}
+                    onChange={(e) => setHybridMin(e.target.value)}
+                  />
+                </label>
+                <label>
+                  {t("hybridTarget")}
+                  <input
+                    type="number"
+                    min="1"
+                    max="2000"
+                    value={hybridTarget}
+                    onChange={(e) => setHybridTarget(e.target.value)}
+                  />
+                </label>
+                <label>
+                  {t("hybridMax")}
+                  <input
+                    type="number"
+                    min="1"
+                    max="2000"
+                    value={hybridMax}
+                    onChange={(e) => setHybridMax(e.target.value)}
+                  />
+                </label>
+              </div>
+              <label>
+                {t("hybridPriority")}
+                <SelectField
+                  value={hybridPriority}
+                  onChange={setHybridPriority}
+                  options={[
+                    { value: "balanced", label: t("balancedPriority") },
+                    { value: "cost", label: t("costPriority") },
+                    { value: "assembly", label: t("assemblyPriority") },
+                    { value: "detail", label: t("detailPriority") },
+                  ]}
+                  label={t("hybridPriority")}
+                />
+              </label>
+            </div>
+          )}
         </div>
         {formError && <p className="form-error">{formError}</p>}
         <div className="dialog-actions drawer-actions">
@@ -898,10 +980,62 @@ export default function App() {
               options={[
                 { value: "cube", label: t("cubeAlgorithm") },
                 { value: "cuboid", label: t("cuboidAlgorithm") },
+                { value: "hybrid", label: t("hybridAlgorithm") },
               ]}
               label={t("algorithm")}
             />
           </label>
+          {algorithm === "hybrid" && (
+            <div className="hybrid-settings wide">
+              <span className="field-title">{t("hybridRange")}</span>
+              <div className="hybrid-number-grid">
+                <label>
+                  {t("hybridMin")}
+                  <input
+                    type="number"
+                    min="1"
+                    max="2000"
+                    value={hybridMin}
+                    onChange={(e) => setHybridMin(e.target.value)}
+                  />
+                </label>
+                <label>
+                  {t("hybridTarget")}
+                  <input
+                    type="number"
+                    min="1"
+                    max="2000"
+                    value={hybridTarget}
+                    onChange={(e) => setHybridTarget(e.target.value)}
+                  />
+                </label>
+                <label>
+                  {t("hybridMax")}
+                  <input
+                    type="number"
+                    min="1"
+                    max="2000"
+                    value={hybridMax}
+                    onChange={(e) => setHybridMax(e.target.value)}
+                  />
+                </label>
+              </div>
+              <label>
+                {t("hybridPriority")}
+                <SelectField
+                  value={hybridPriority}
+                  onChange={setHybridPriority}
+                  options={[
+                    { value: "balanced", label: t("balancedPriority") },
+                    { value: "cost", label: t("costPriority") },
+                    { value: "assembly", label: t("assemblyPriority") },
+                    { value: "detail", label: t("detailPriority") },
+                  ]}
+                  label={t("hybridPriority")}
+                />
+              </label>
+            </div>
+          )}
         </div>
         <section className="preferences-section">
           <span className="overline">{t("preferences").toUpperCase()}</span>

@@ -113,17 +113,36 @@ class Stage {
       this.current.material.dispose();
       this.current = null;
     }
+    if (this.currentCells) {
+      this.content.remove(this.currentCells);
+      this.currentCells.material.dispose();
+      this.currentCells = null;
+    }
+  }
+  renderCells(piece) {
+    if (!piece.voxels?.length) return [piece];
+    return piece.voxels.map(([x, y, z, color]) => ({
+      x,
+      y,
+      z,
+      sx: 1,
+      sy: 1,
+      sz: 1,
+      color: color || piece.color,
+    }));
   }
   load(model) {
     this.clear();
     this.model = model;
     const buckets = new Map();
     model.pieces.forEach((piece, index) => {
-      const [sx, sy, sz] = this.dimensions(piece);
-      const key = `${sx}:${sy}:${sz}:${piece.color}`;
-      if (!buckets.has(key))
-        buckets.set(key, { sx, sy, sz, color: piece.color, items: [] });
-      buckets.get(key).items.push({ piece, step: index + 1 });
+      this.renderCells(piece).forEach((cell) => {
+        const [sx, sy, sz] = this.dimensions(cell);
+        const key = `${sx}:${sy}:${sz}:${cell.color}`;
+        if (!buckets.has(key))
+          buckets.set(key, { sx, sy, sz, color: cell.color, items: [] });
+        buckets.get(key).items.push({ piece: cell, step: index + 1 });
+      });
     });
     for (const bucket of buckets.values()) {
       const color = COLORS[bucket.color] || COLORS.other,
@@ -173,6 +192,22 @@ class Stage {
     );
     this.current.renderOrder = 3;
     this.content.add(this.current);
+    const maxCells = Math.max(
+      1,
+      ...model.pieces.map((piece) => piece.voxels?.length || 1),
+    );
+    this.currentCells = new THREE.InstancedMesh(
+      this.geometry(1),
+      new THREE.MeshStandardMaterial({
+        color: "#ffffff",
+        roughness: 0.55,
+        metalness: 0,
+      }),
+      maxCells,
+    );
+    this.currentCells.renderOrder = 3;
+    this.currentCells.frustumCulled = false;
+    this.content.add(this.currentCells);
     const [x, , z] = model.dimensions;
     this.grid.position.set(x / 2, -0.08, z / 2);
     this.grid.scale.set(
@@ -223,18 +258,38 @@ class Stage {
     }
     const piece = this.model.pieces[step - 1];
     if (piece) {
-      const [sx, sy, sz] = this.dimensions(piece);
-      this.current.geometry = this.geometry(sx, sy, sz);
-      this.current.position.set(
-        piece.x + sx / 2,
-        piece.y + sy / 2,
-        piece.z + sz / 2,
-      );
-      this.current.material.color.set(
-        highlight ? "#10a37f" : COLORS[piece.color] || COLORS.other,
-      );
-      this.current.material.emissiveIntensity = highlight ? 0.16 : 0;
-      this.current.visible = true;
+      if (piece.voxels?.length) {
+        const cells = this.renderCells(piece);
+        cells.forEach((cell, index) => {
+          this.currentCells.setMatrixAt(index, this.matrixFor(cell, matrix));
+          this.currentCells.setColorAt(
+            index,
+            new THREE.Color(
+              highlight ? "#10a37f" : COLORS[cell.color] || COLORS.other,
+            ),
+          );
+        });
+        this.currentCells.count = cells.length;
+        this.currentCells.instanceMatrix.needsUpdate = true;
+        if (this.currentCells.instanceColor)
+          this.currentCells.instanceColor.needsUpdate = true;
+        this.currentCells.visible = true;
+        this.current.visible = false;
+      } else {
+        const [sx, sy, sz] = this.dimensions(piece);
+        this.current.geometry = this.geometry(sx, sy, sz);
+        this.current.position.set(
+          piece.x + sx / 2,
+          piece.y + sy / 2,
+          piece.z + sz / 2,
+        );
+        this.current.material.color.set(
+          highlight ? "#10a37f" : COLORS[piece.color] || COLORS.other,
+        );
+        this.current.material.emissiveIntensity = highlight ? 0.16 : 0;
+        this.current.visible = true;
+        this.currentCells.visible = false;
+      }
     }
     if (follow) this.focusBuilt(step);
     else this.invalidate(3);
@@ -311,13 +366,15 @@ class Stage {
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const objects = [
       this.current,
+      this.currentCells,
       ...this.groups
         .flatMap((g) => [g.built, g.future])
         .filter((o) => o.visible),
     ];
     const hit = this.raycaster.intersectObjects(objects, false)[0];
     if (!hit) return;
-    if (hit.object === this.current) this.onSelect(this.step);
+    if (hit.object === this.current || hit.object === this.currentCells)
+      this.onSelect(this.step);
     else {
       const group = this.groups.find(
         (g) => g.built === hit.object || g.future === hit.object,

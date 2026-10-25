@@ -18,7 +18,7 @@
     "dist:win": "npm run build && npm run icon:generate && npm run backend:package && electron-builder --win nsis --publish never",
     "release:win": "npm run build && npm run icon:generate && npm run backend:package && electron-builder --win nsis --publish always",
     "format:check": "prettier --check frontend/src electron scripts README.md docs .github package.json",
-    "test": "npm run electron:check && npm run build && python backend/test_app.py"
+    "test": "npm run electron:check && npm run build && python backend/test_geometry.py && python backend/test_app.py"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

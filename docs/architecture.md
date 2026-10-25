@@ -11,7 +11,9 @@ PixelPath, ürün mantığını masaüstü kabuğundan ayıran modüler bir yap�
 - `frontend/src/Viewer3D.jsx`: Three.js sahnesi, instanced mesh ve kamera davranışıdır. Küp ve dikdörtgen prizma geometrilerini gösterir.
 - `frontend/src/App.jsx`: veri akışı, model işlemleri ve ekran kompozisyonudur.
 - `backend/app.py`: yalnızca localhost üzerinde çalışan HTTP API ve kalıcı veri katmanıdır.
-- `backend/engine.py`: schematic okuma, sadeleştirme, küp/prizma parçalama ve montaj sırası motorudur.
+- `backend/engine.py`: schematic okuma, sadeleştirme, eski küp/prizma motorları ve ortak montaj ağıdır.
+- `backend/hybrid.py`: görsel voxel katmanını fiziksel modüllerden ayıran, renk/detay ağırlıklı deterministik bölümleme motorudur.
+- `backend/mesh.py`: fiziksel modüllerden kapalı yüzey çıkarır, manifold kontrolü yapar ve gerçek binary STL üretir.
 - `electron/`: güvenli preload köprüsü, Python süreç yönetimi, pencere yaşam döngüsü ve otomatik güncelleme katmanıdır.
 - `web/`: Vite üretim çıktısıdır; kaynak değildir ve Git'e eklenmez.
 
@@ -28,6 +30,12 @@ PixelPath, ürün mantığını masaüstü kabuğundan ayıran modüler bir yap�
 ## Yerel veri ve paketleme
 
 Geliştirmede Electron, `backend/app.py` sürecini boş bir localhost portunda başlatır. Paketli sürüm aynı API'yi PyInstaller çıktısından çalıştırır. React çıktısı Python paketine gömülür; Electron yalnızca pencereyi ve işletim sistemi entegrasyonlarını yönetir.
+
+## Hibrit üretim hattı
+
+Hibrit mod, her kaynak voxel'i tam olarak bir yüzey-bağlantılı fiziksel modüle atar. Hedef parça sayısı ve optimizasyon önceliği kullanıcı ayarıdır. Dijital voxel birleşiminde kenar sıkışması oluşturan gruplar STL'den önce manifold alt gruplara ayrılır; bu nedenle gerçek parça sayısı istenen hedeften sapabilir ancak seçilen min–maks aralığı için uyarı üretilir.
+
+`production.zip` şu anda yerel orijine taşınmış solid binary STL'ler, `manifest.json` ve `geometry-validation.json` içerir. Hollow ve bağlantı geometrileri henüz üretilmez; manifest bunları açıkça `not_generated` ve `physically_validated: false` olarak işaretler. Dijital manifold testi fiziksel baskı, tolerans veya dayanım doğrulaması değildir.
 
 ## Doğrulama ve yayın
 

@@ -14,11 +14,13 @@ import threading
 import uuid
 import webbrowser
 import mimetypes
+import zipfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 from engine import from_schem, load_csv, model_from_pieces
+from mesh import part_to_stl
 
 BUNDLE_ROOT=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent))
 ROOT=Path(__file__).resolve().parent
@@ -33,6 +35,40 @@ MODELS=DATA/'models'
 WEB=(BUNDLE_ROOT/'web') if getattr(sys,'frozen',False) else (PROJECT_ROOT/'web')
 SEED=(BUNDLE_ROOT/'seed') if getattr(sys,'frozen',False) else (ROOT/'seed')
 MAX_UPLOAD=30*1024*1024
+
+def production_archive(model):
+    """Create a transparent, deterministic first-stage production package.
+
+    Files are real watertight solid STLs. Hollowing and connector generation
+    are deliberately reported as not generated until those stages can be
+    validated instead of being represented by placeholder geometry.
+    """
+    output=io.BytesIO();checks=[];unit_mm=float(model['cube_cm'])*10
+    with zipfile.ZipFile(output,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as archive:
+        for part in model['pieces']:
+            code=part.get('part_code',f'PART-{int(part["id"]):03d}')
+            stl,report=part_to_stl(part,unit_mm)
+            checks.append({'part_code':code,**report})
+            archive.writestr(f'stl/{code}.stl',stl)
+        manifest={
+            'format':'PixelPath production package v1',
+            'model':model['name'],'algorithm':model.get('algorithm','cube'),
+            'unit':'millimeter','voxel_edge_mm':unit_mm,
+            'visual_voxel_count':model.get('visual_voxel_count',model.get('reduced_voxels')),
+            'physical_piece_count':len(model['pieces']),
+            'geometry_mode':'solid_voxel_union',
+            'hollowing':{'status':'not_generated','physically_validated':False},
+            'connectors':{'status':'not_generated','physically_validated':False},
+            'parts':[{key:part.get(key) for key in ('id','part_code','region','step','x','y','z','sx','sy','sz','voxel_count','color','anchor','face')}
+                     for part in model['pieces']],
+            'warnings':model.get('warnings',[])+[
+                'Bu paket dijital manifold kontrolünden geçti; fiziksel baskı doğrulaması yapılmadı.',
+                'Hollow ve bağlantı geometrileri bu fazda üretilmedi.'
+            ],
+        }
+        archive.writestr('manifest.json',json.dumps(manifest,ensure_ascii=False,indent=2))
+        archive.writestr('geometry-validation.json',json.dumps(checks,ensure_ascii=False,indent=2))
+    return output.getvalue()
 
 def safe_id(value):
     if not re.fullmatch(r'[0-9a-f]{32}',str(value)):raise ValueError('Geçersiz model kimliği')
@@ -81,13 +117,17 @@ def parse_options(q,default_name='Yeni Model'):
     name=str(q.get('name',[default_name])[0]).strip()[:90] or default_name
     if not 1<=factor<=15:raise ValueError('Sadeleştirme değeri 1–15 arasında olmalı')
     if not .2<=cube_cm<=20:raise ValueError('Küp kenarı 0,2–20 cm arasında olmalı')
-    if algorithm not in ('cube','cuboid'):raise ValueError('Geçersiz parça algoritması')
-    return factor,cube_cm,name,algorithm
+    if algorithm not in ('cube','cuboid','hybrid'):raise ValueError('Geçersiz parça algoritması')
+    minimum=int(q.get('hybrid_min',['100'])[0]);target=int(q.get('hybrid_target',['130'])[0]);maximum=int(q.get('hybrid_max',['150'])[0])
+    priority=str(q.get('hybrid_priority',['balanced'])[0])
+    if not 1<=minimum<=target<=maximum<=2000:raise ValueError('Hybrid parça hedefleri min ≤ hedef ≤ maks ve 1–2000 aralığında olmalı')
+    if priority not in ('cost','assembly','detail','balanced'):raise ValueError('Geçersiz hybrid optimizasyon önceliği')
+    return factor,cube_cm,name,algorithm,{'minimum':minimum,'target':target,'maximum':maximum,'priority':priority}
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version='HTTP/1.1'
     def log_message(self,fmt,*args):pass
-    def send_data(self,data,mime='application/json',code=200):
+    def send_data(self,data,mime='application/json',code=200,headers=None):
         if isinstance(data,(dict,list)):data=json.dumps(data,ensure_ascii=False).encode('utf-8')
         elif isinstance(data,str):data=data.encode('utf-8')
         self.send_response(code)
@@ -95,6 +135,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Content-Length',str(len(data)))
         self.send_header('Cache-Control','no-store')
         self.send_header('X-Content-Type-Options','nosniff')
+        for key,value in (headers or {}).items():self.send_header(key,value)
         self.end_headers()
         self.wfile.write(data)
     def fail(self,err,code=400):self.send_data({'error':str(err)},code=code)
@@ -120,6 +161,12 @@ class Handler(BaseHTTPRequestHandler):
                         size=p.get('size',1);sx=p.get('sx',size);sy=p.get('sy',size);sz=p.get('sz',size)
                         w.writerow([p['step'],p['id'],p['x'],p['y'],p['z'],sx,sy,sz,sx*m['cube_cm'],sy*m['cube_cm'],sz*m['cube_cm'],p['color'],p['anchor'],p['face']])
                     return self.send_data('\ufeff'+s.getvalue(),'text/csv')
+                if len(parts)==4 and parts[3]=='production.zip':
+                    mid=safe_id(parts[2]);m=get_model(mid)
+                    filename=re.sub(r'[^A-Za-z0-9._-]+','-',m['name']).strip('-') or 'pixelpath-model'
+                    return self.send_data(production_archive(m),'application/zip',headers={
+                        'Content-Disposition':f'attachment; filename="{filename}-production.zip"'
+                    })
             # Vite fingerprints production assets, so serve files from the web
             # directory without hard-coding bundle names. resolve() prevents
             # traversal outside the local frontend directory.
@@ -135,12 +182,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path=='/api/models/import':
                 q=parse_qs(parsed.query);name=q.get('name',['Yeni Model'])[0]
-                factor,cube_cm,name,algorithm=parse_options(q)
+                factor,cube_cm,name,algorithm,hybrid_options=parse_options(q)
                 filename=q.get('filename',['new.schem'])[0]
                 ext=Path(filename).suffix.lower()
                 data=self.read_body()
                 if ext=='.schem':
-                    model=from_schem(data,name,factor,cube_cm,algorithm);source='schem'
+                    model=from_schem(data,name,factor,cube_cm,algorithm,hybrid_options);source='schem'
                 elif ext=='.csv':
                     pieces=load_csv(data)
                     model=model_from_pieces(pieces,name,None,cube_cm,algorithm='custom');source='csv'
@@ -155,12 +202,15 @@ class Handler(BaseHTTPRequestHandler):
             if len(parts)==4 and parts[:2]==['api','models'] and parts[3]=='settings':
                 mid=safe_id(parts[2]);meta=get_metadata(mid);old=get_model(mid)
                 body=json.loads(self.read_body().decode('utf-8'))
-                opts={k:[str(v)] for k,v in body.items() if k in ('name','factor','cube_cm','algorithm')}
+                opts={k:[str(v)] for k,v in body.items() if k in ('name','factor','cube_cm','algorithm','hybrid_min','hybrid_target','hybrid_max','hybrid_priority')}
                 if 'algorithm' not in opts:opts['algorithm']=[old.get('algorithm','cube')]
+                previous_hybrid=old.get('hybrid',{})
+                for key,source_key,default in (('hybrid_min','minimum',100),('hybrid_target','requested_target',130),('hybrid_max','maximum',150),('hybrid_priority','priority','balanced')):
+                    if key not in opts:opts[key]=[str(previous_hybrid.get(source_key,default))]
                 if meta['source']!='schem':opts['algorithm']=['cube']
-                factor,cube_cm,name,algorithm=parse_options(opts,old['name'])
+                factor,cube_cm,name,algorithm,hybrid_options=parse_options(opts,old['name'])
                 if meta['source']=='schem':
-                    model=from_schem((model_dir(mid)/'source.schem').read_bytes(),name,factor,cube_cm,algorithm)
+                    model=from_schem((model_dir(mid)/'source.schem').read_bytes(),name,factor,cube_cm,algorithm,hybrid_options)
                 else:
                     pieces=load_csv((model_dir(mid)/'original.csv').read_bytes())
                     model=model_from_pieces(pieces,name,None,cube_cm,algorithm='custom')

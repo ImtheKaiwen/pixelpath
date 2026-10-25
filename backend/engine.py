@@ -1,4 +1,4 @@
-"""Sponge schematic -> color-aware downsample -> cube/cuboid greedy cover.
+"""Sponge schematic -> color-aware downsample -> cube/cuboid/hybrid cover.
 Coordinates: x=width, y=vertical, z=depth.
 """
 from __future__ import annotations
@@ -7,6 +7,7 @@ import io
 import json
 from collections import Counter, defaultdict
 from math import prod
+from hybrid import hybrid_partition
 
 PALETTE = {
     'yellow': {'label': 'Sarı', 'hex': '#F1D16F'},
@@ -141,6 +142,12 @@ def _piece_dimensions(piece):
     size=int(piece.get('size',1))
     return (int(piece.get('sx',size)),int(piece.get('sy',size)),int(piece.get('sz',size)))
 
+def _piece_cells(piece):
+    if piece.get('voxels'):
+        return ((int(v[0]),int(v[1]),int(v[2])) for v in piece['voxels'])
+    x,y,z=piece['x'],piece['y'],piece['z'];sx,sy,sz=_piece_dimensions(piece)
+    return ((a,b,c) for a in range(x,x+sx) for b in range(y,y+sy) for c in range(z,z+sz))
+
 def greedy_cuboid_cover(occupied, shape):
     """Cover same-color voxels with axis-aligned rectangular prisms.
 
@@ -208,29 +215,16 @@ def contact_network(pieces):
     """
     voxel_owner={}
     for p in pieces:
-        x,y,z=p['x'],p['y'],p['z'];sx,sy,sz=_piece_dimensions(p)
-        for a in range(x,x+sx):
-            for b in range(y,y+sy):
-                for c in range(z,z+sz):
-                    key=(a,b,c)
-                    if key in voxel_owner: raise ValueError('Küp parçaları çakışıyor')
-                    voxel_owner[key]=p['id']
+        for key in _piece_cells(p):
+            if key in voxel_owner: raise ValueError('Fiziksel parçalar çakışıyor')
+            voxel_owner[key]=p['id']
         if len(voxel_owner)>600000:raise ValueError('Montaj sınırı: 600.000 voxel')
     links=defaultdict(lambda:defaultdict(lambda:defaultdict(int)))
     directions=[('x+',1,0,0),('x-',-1,0,0),('y+',0,1,0),('y-',0,-1,0),('z+',0,0,1),('z-',0,0,-1)]
     for p in pieces:
-        x,y,z=p['x'],p['y'],p['z'];sx,sy,sz=_piece_dimensions(p);pid=p['id']
-        for face,dx,dy,dz in directions:
-            if face.startswith('x'):
-                v=x+sx-1 if dx>0 else x
-                coords=((v,b,c) for b in range(y,y+sy) for c in range(z,z+sz))
-            elif face.startswith('y'):
-                v=y+sy-1 if dy>0 else y
-                coords=((a,v,c) for a in range(x,x+sx) for c in range(z,z+sz))
-            else:
-                v=z+sz-1 if dz>0 else z
-                coords=((a,b,v) for a in range(x,x+sx) for b in range(y,y+sy))
-            for a,b,c in coords:
+        pid=p['id']
+        for a,b,c in _piece_cells(p):
+            for face,dx,dy,dz in directions:
                 other=voxel_owner.get((a+dx,b+dy,c+dz))
                 if other is not None and other != pid:links[pid][other][face]+=1
     return {p['id']:{q:dict(face_area) for q,face_area in links[p['id']].items()} for p in pieces}
@@ -276,7 +270,7 @@ def assembly_order(pieces):
         for other in links[pid]:enqueue(other)
     return order,warnings
 
-def model_from_pieces(pieces, name, factor, cube_cm, source_blocks=None, source_dims=None, algorithm='cube'):
+def model_from_pieces(pieces, name, factor, cube_cm, source_blocks=None, source_dims=None, algorithm='cube', extra=None):
     ordered,warnings=assembly_order(pieces)
     material=[]
     counters=Counter((p['color'],*_piece_dimensions(p)) for p in pieces)
@@ -288,15 +282,33 @@ def model_from_pieces(pieces, name, factor, cube_cm, source_blocks=None, source_
     sizes={str(k):v for k,v in sorted(Counter(_piece_dimensions(p)[0] for p in pieces if len(set(_piece_dimensions(p)))==1).items())}
     shape_counts=Counter(_piece_dimensions(p) for p in pieces)
     shapes={f'{sx}x{sy}x{sz}':count for (sx,sy,sz),count in shape_counts.items()}
-    return {'name':name,'factor':factor,'cube_cm':cube_cm,'source_blocks':source_blocks,
+    model={'name':name,'factor':factor,'cube_cm':cube_cm,'source_blocks':source_blocks,
             'source_dims':source_dims,'dimensions':dims,'algorithm':algorithm,
-            'reduced_voxels':sum(prod(_piece_dimensions(p)) for p in pieces),
+            'reduced_voxels':sum(p.get('voxel_count',prod(_piece_dimensions(p))) for p in pieces),
             'piece_count':len(pieces),'cube_sizes':sizes,'piece_shapes':shapes,'materials':material,
             'palette':PALETTE,'warnings':warnings,'pieces':ordered}
+    if extra:model.update(extra)
+    return model
 
-def from_schem(data: bytes, name: str, factor: int, cube_cm: float, algorithm='cube'):
+def from_schem(data: bytes, name: str, factor: int, cube_cm: float, algorithm='cube', hybrid_options=None):
     grid,source_blocks,source_dims=load_schematic(data)
     reduced,shape=reduce_voxels(grid,source_dims,factor)
-    pieces=greedy_cuboid_cover(reduced,shape) if algorithm=='cuboid' else greedy_cube_cover(reduced,shape)
+    extra=None
+    if algorithm=='hybrid':
+        options=hybrid_options or {}
+        pieces,report=hybrid_partition(reduced,**options)
+        # The partitioner works with compact numeric palette ids. Convert at
+        # this boundary so the persisted model keeps the same public colour
+        # contract used by the existing cube/cuboid engines and the viewer.
+        for piece in pieces:
+            piece['color_id']=piece['color']
+            piece['color']=COLOR_NAMES[piece['color_id']]
+            piece['colors']={COLOR_NAMES[int(color)]:count for color,count in piece['colors'].items()}
+            piece['voxels']=[[*voxel[:3],COLOR_NAMES[voxel[3]]] for voxel in piece['voxels']]
+        extra={'hybrid':report,'visual_voxel_count':len(reduced),'physical_piece_count':len(pieces)}
+    else:
+        pieces=greedy_cuboid_cover(reduced,shape) if algorithm=='cuboid' else greedy_cube_cover(reduced,shape)
     if not pieces:raise ValueError('Modelde dolu voxel bulunamadı')
-    return model_from_pieces(pieces,name,factor,cube_cm,source_blocks,source_dims,algorithm)
+    model=model_from_pieces(pieces,name,factor,cube_cm,source_blocks,source_dims,algorithm,extra)
+    if extra:model['warnings'].extend(report['warnings'])
+    return model
