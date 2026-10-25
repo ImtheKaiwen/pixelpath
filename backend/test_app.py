@@ -32,7 +32,16 @@ with tempfile.TemporaryDirectory() as folder:
     if port is None:
       stderr=proc.stderr.read() if proc.poll() is not None else b''
       raise RuntimeError('Server failed start: '+(b''.join(startup)+stderr).decode(errors='replace'))
-    st,items=request(port,'/api/models')
+    for _ in range(50):
+      try:
+        st,items=request(port,'/api/models')
+        break
+      except OSError:
+        if proc.poll() is not None:break
+        time.sleep(.1)
+    else:raise RuntimeError('Server became ready but did not accept requests')
+    if proc.poll() is not None:
+      raise RuntimeError('Server exited after startup: '+proc.stderr.read().decode(errors='replace'))
     assert st==200 and len(items['models'])==1,items
     mid=items['models'][0]['id']
     st,model=request(port,f'/api/models/{mid}')
