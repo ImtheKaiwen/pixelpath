@@ -215,7 +215,7 @@ def serve(port=8765, open_window=True):
         srv=ThreadingHTTPServer(('127.0.0.1',0),Handler)
     addr=f'http://127.0.0.1:{srv.server_address[1]}'
     print('PIXELPATH_READY '+addr,flush=True)
-    print('Kayıt klasörü:',DATA,flush=True)
+    print('Data directory:',DATA,flush=True)
     if open_window:
         def delayed_open():
             import time
