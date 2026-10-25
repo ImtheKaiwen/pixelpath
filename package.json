@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "icon:generate": "node scripts/generate-icons.mjs",
     "electron:dev": "npm run build && npm run icon:generate && electron .",
-    "electron:check": "node --check electron/main.cjs && node --check electron/backend.cjs && node --check electron/preload.cjs && node --check electron/updater.cjs",
+    "electron:check": "node --check electron/main.cjs && node --check electron/backend.cjs && node --check electron/preload.cjs && node --check electron/updater.cjs && node electron/test-update-state.cjs",
     "backend:package": "pyinstaller --noconfirm --clean --distpath backend/dist --workpath backend/build backend/pixelpath-backend.spec",
     "dist:win": "npm run build && npm run icon:generate && npm run backend:package && electron-builder --win nsis --publish never",
     "release:win": "npm run build && npm run icon:generate && npm run backend:package && electron-builder --win nsis --publish always",

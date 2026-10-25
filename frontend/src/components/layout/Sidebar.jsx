@@ -1,5 +1,6 @@
 import React from "react";
 import { Icon } from "../../icons";
+import UpdateCenter from "../ui/UpdateCenter";
 
 export default function Sidebar({
   open,
@@ -75,6 +76,7 @@ export default function Sidebar({
             {t("privateBody")}
           </p>
         </div>
+        <UpdateCenter t={t} expanded={open} />
         <button
           className="language-trigger"
           onClick={onLanguagePicker}

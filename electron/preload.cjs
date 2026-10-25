@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("pixelpath", {
   updates: {
     getState: () => ipcRenderer.invoke("updates:get-state"),
     check: () => ipcRenderer.send("updates:check"),
+    download: () => ipcRenderer.send("updates:download"),
     install: () => ipcRenderer.send("updates:install"),
     subscribe: (callback) => {
       const listener = (_event, state) => callback(state);

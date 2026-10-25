@@ -42,7 +42,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Kurulu uygulama yeni sürümü arka planda denetler; indirme ilerlemesini arayüzde gösterir ve hazır olduğunda kullanıcıdan yeniden başlatma onayı ister. Üretim dağıtımında Windows SmartScreen güveni için ayrıca kod imzalama sertifikası yapılandırılmalıdır.
+Kurulu uygulama açılışta ve altı saatte bir yeni sürümü arka planda denetler. Bir sürüm bulunduğunda sidebar'daki güncelleme merkezi görünür; indirme ve kurulum yalnızca kullanıcı isteğiyle başlar. Electron Updater, GitHub Release içindeki `latest.yml` ve blockmap bütünlüğünü kullanır. Üretim dağıtımında Windows SmartScreen güveni için ayrıca kod imzalama sertifikası yapılandırılmalıdır.
 
 ## Veri güvenliği
 

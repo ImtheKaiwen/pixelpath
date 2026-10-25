@@ -15,6 +15,7 @@ PixelPath, ürün mantığını masaüstü kabuğundan ayıran modüler bir yap�
 - `backend/hybrid.py`: görsel voxel katmanını fiziksel modüllerden ayıran, renk/detay ağırlıklı deterministik bölümleme motorudur.
 - `backend/mesh.py`: fiziksel modüllerden kapalı yüzey çıkarır, manifold kontrolü yapar ve gerçek binary STL üretir.
 - `electron/`: güvenli preload köprüsü, Python süreç yönetimi, pencere yaşam döngüsü ve otomatik güncelleme katmanıdır.
+- `electron/update-state.cjs`: güncelleme denetimi, kullanıcı kontrollü indirme, ilerleme, hata ve kuruluma hazır durumları için saf/test edilebilir durum makinesidir.
 - `web/`: Vite üretim çıktısıdır; kaynak değildir ve Git'e eklenmez.
 
 ## Tasarım kuralları
@@ -45,5 +46,5 @@ npm test
 npm run dist:win
 ```
 
-- `.github/workflows/tests.yml`: push ve pull requestlerde biçim, üretim derlemesi ve entegrasyon testleri.
+- `.github/workflows/tests.yml`: push ve pull requestlerde biçim, üretim derlemesi, geometri/API ve updater durum testleri.
 - `.github/workflows/release.yml`: `v*` etiketlerinde Windows installer, blok haritası ve güncelleme manifestlerini GitHub Releases'a yayınlar.

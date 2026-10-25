@@ -12,7 +12,6 @@ import SelectField from "./components/ui/SelectField";
 import Switch from "./components/ui/Switch";
 import TabSwitch from "./components/ui/TabSwitch";
 import Toast from "./components/ui/Toast";
-import UpdateCenter from "./components/ui/UpdateCenter";
 import LanguagePicker from "./components/ui/LanguagePicker";
 import SplashScreen from "./components/ui/SplashScreen";
 import { translate } from "./i18n";
@@ -751,7 +750,6 @@ export default function App() {
         )}
       </main>
       <Toast message={message} onClose={() => setMessage("")} />
-      <UpdateCenter t={t} />
       <LanguagePicker
         open={languageOpen}
         value={language}
