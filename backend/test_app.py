@@ -1,4 +1,4 @@
-import tempfile,subprocess,sys,os,time,json,urllib.request,urllib.parse,csv,io
+import tempfile,subprocess,sys,os,time,json,urllib.request,urllib.parse,csv,io,queue,threading,re
 from pathlib import Path
 from engine import greedy_cuboid_cover
 root=Path(__file__).resolve().parent
@@ -14,21 +14,25 @@ def request(port,path,method='GET',body=None):
     return res.status, (json.loads(b) if res.headers.get('Content-Type','').startswith('application/json') else b)
 
 with tempfile.TemporaryDirectory() as folder:
-  import socket
-  s=socket.socket();s.bind(('127.0.0.1',0));port=s.getsockname()[1];s.close()
   env={**os.environ,'PIXELPATH_DATA':folder}
-  script=f"import sys;sys.path.insert(0,{str(root)!r});from app import serve;serve(port={port},open_window=False)"
-  proc=subprocess.Popen([sys.executable,'-c',script],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+  env['NO_PROXY']='127.0.0.1,localhost'
+  proc=subprocess.Popen([sys.executable,str(root/'app.py'),'--port','0','--no-open'],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
   try:
-    for _ in range(50):
-      try:st,items=request(port,'/api/models');break
-      except Exception:time.sleep(.1)
-    else:
-      detail=''
-      if proc.poll() is not None:
-        stdout,stderr=proc.communicate(timeout=2)
-        detail=(stdout+stderr).decode(errors='replace')
-      raise RuntimeError('Server failed start: '+detail)
+    output=queue.Queue()
+    threading.Thread(target=lambda:[output.put(line) for line in iter(proc.stdout.readline,b'')],daemon=True).start()
+    deadline=time.time()+20;port=None;startup=[]
+    while time.time()<deadline and port is None:
+      try:line=output.get(timeout=.2)
+      except queue.Empty:
+        if proc.poll() is not None:break
+        continue
+      startup.append(line)
+      match=re.search(rb'PIXELPATH_READY http://127\.0\.0\.1:(\d+)',line)
+      if match:port=int(match.group(1))
+    if port is None:
+      stderr=proc.stderr.read() if proc.poll() is not None else b''
+      raise RuntimeError('Server failed start: '+(b''.join(startup)+stderr).decode(errors='replace'))
+    st,items=request(port,'/api/models')
     assert st==200 and len(items['models'])==1,items
     mid=items['models'][0]['id']
     st,model=request(port,f'/api/models/{mid}')
