@@ -1,0 +1,16 @@
+node_modules/
+__pycache__/
+*.py[cod]
+*.log
+.DS_Store
+Thumbs.db
+/web/
+/release/
+/backend/build/
+/backend/dist/
+/build/icon.png
+.venv/
+.pytest_cache/
+.env
+.env.*
+!.env.example

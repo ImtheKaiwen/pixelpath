@@ -1,0 +1,78 @@
+{
+  "name": "pixelpath",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Turn voxel models into clear, step-by-step physical build plans.",
+  "author": "Kaiwen Corp",
+  "repository": "https://github.com/ImtheKaiwen/pixelpath.git",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview",
+    "icon:generate": "node scripts/generate-icons.mjs",
+    "electron:dev": "npm run build && npm run icon:generate && electron .",
+    "electron:check": "node --check electron/main.cjs && node --check electron/backend.cjs && node --check electron/preload.cjs && node --check electron/updater.cjs",
+    "backend:package": "pyinstaller --noconfirm --clean --distpath backend/dist --workpath backend/build backend/pixelpath-backend.spec",
+    "dist:win": "npm run build && npm run icon:generate && npm run backend:package && electron-builder --win nsis --publish never",
+    "release:win": "npm run build && npm run icon:generate && npm run backend:package && electron-builder --win nsis --publish always",
+    "format:check": "prettier --check frontend/src electron scripts README.md docs .github package.json",
+    "test": "npm run electron:check && npm run build && python backend/test_app.py"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "electron-updater": "^6.8.9",
+    "lucide-react": "^1.59.0",
+    "react": "latest",
+    "react-dom": "latest",
+    "three": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "electron": "^44.9.3",
+    "electron-builder": "^26.15.3",
+    "prettier": "^3.9.10",
+    "sharp": "^0.35.5"
+  },
+  "build": {
+    "appId": "com.kaiwen.pixelpath",
+    "productName": "PixelPath",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/dist/pixelpath-backend.exe",
+        "to": "backend/pixelpath-backend.exe"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png",
+      "artifactName": "PixelPath-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PixelPath",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ImtheKaiwen",
+        "repo": "pixelpath",
+        "releaseType": "release"
+      }
+    ]
+  }
+}
