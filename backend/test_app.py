@@ -2,13 +2,14 @@ import tempfile,subprocess,sys,os,time,json,urllib.request,urllib.parse,csv,io
 from pathlib import Path
 from engine import greedy_cuboid_cover
 root=Path(__file__).resolve().parent
+opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 rect=greedy_cuboid_cover({(x,y,z):1 for x in range(3) for y in range(2) for z in range(4)},[3,2,4])
 assert len(rect)==1 and (rect[0]['sx'],rect[0]['sy'],rect[0]['sz'])==(3,2,4)
 
 def request(port,path,method='GET',body=None):
   req=urllib.request.Request(f'http://127.0.0.1:{port}{path}',method=method,data=body)
-  with urllib.request.urlopen(req,timeout=60) as res:
+  with opener.open(req,timeout=15) as res:
     b=res.read()
     return res.status, (json.loads(b) if res.headers.get('Content-Type','').startswith('application/json') else b)
 
@@ -22,7 +23,12 @@ with tempfile.TemporaryDirectory() as folder:
     for _ in range(50):
       try:st,items=request(port,'/api/models');break
       except Exception:time.sleep(.1)
-    else:raise RuntimeError('Server failed start')
+    else:
+      detail=''
+      if proc.poll() is not None:
+        stdout,stderr=proc.communicate(timeout=2)
+        detail=(stdout+stderr).decode(errors='replace')
+      raise RuntimeError('Server failed start: '+detail)
     assert st==200 and len(items['models'])==1,items
     mid=items['models'][0]['id']
     st,model=request(port,f'/api/models/{mid}')
